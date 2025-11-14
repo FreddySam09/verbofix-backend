@@ -1,0 +1,6 @@
+venv
+accounts/__pycache__
+accounts/migrations/__pycache__
+core/__pycache__
+therapy_sessions/__pycache__
+therapy_sessions/migrations/__pycache__
