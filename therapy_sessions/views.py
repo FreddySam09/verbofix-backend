@@ -1,13 +1,14 @@
 from rest_framework import viewsets, permissions, status, serializers
 from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.conf import settings
 from django.core.mail import send_mail
 from datetime import timedelta
-from .models import Speaker, Pairing, Session, Report
+from .models import Speaker, Pairing, Session, Report, SessionFeedback
 from .serializers import SpeakerSerializer, PairingSerializer, SessionSerializer, ReportSerializer
 try:
     from twilio.rest import Client as TwilioClient
@@ -71,6 +72,26 @@ def notify_user_on_approval(user, session: Session):
     user_phone = getattr(user, "phone", None)
     if user_phone:
         send_sms(join_msg, user_phone)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def submit_feedback(request):
+    session_id = request.data.get("session_id")
+    rating = request.data.get("rating")
+    comment = request.data.get("comment")
+    target = request.data.get("target")
+
+    session = get_object_or_404(Session, id=session_id)
+
+    SessionFeedback.objects.create(
+        session=session,
+        given_by=request.user,
+        rating=rating,
+        comment=comment,
+        target=target
+    )
+
+    return Response({"success": True})
 
 class SpeakerViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Speaker.objects.all()
@@ -238,7 +259,6 @@ class SessionViewSet(viewsets.ModelViewSet):
             "ended_at": session.ended_at,
         })
 
-    @action(detail=True, methods=["post"], url_path="upload_audio")
     def upload_audio(self, request, pk=None):
         """
         Upload user's recorded audio blob. Field name: 'audio'
@@ -299,3 +319,47 @@ def analyze_audio(request):
     session.report_generated = True
     session.save()
     return Response({"report": ReportSerializer(report).data}, status=status.HTTP_201_CREATED)
+
+# sessions/views.py
+
+import requests
+from django.core.files.base import ContentFile
+from .models import Session, Report
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
+
+FLASK_URL = "http://127.0.0.1:5000/analyze"
+
+@api_view(["POST"])
+def upload_audio(request, session_id):
+    session = Session.objects.get(id=session_id)
+
+    audio_file = request.FILES.get("audio")
+    if not audio_file:
+        return Response({"error": "No audio found"}, status=400)
+
+    session.recording.save(f"session_{session_id}.wav", audio_file)
+    session.save()
+
+    # ---- Send audio to Flask ML Model ----
+    files = {"audio": session.recording.open("rb")}
+    flask_res = requests.post(FLASK_URL, files=files)
+
+    if flask_res.status_code != 200:
+        return Response({"error": "Flask processing failed"}, status=500)
+
+    report_data = flask_res.json()
+
+    # ---- Store in Report model ----
+    report, created = Report.objects.get_or_create(session=session)
+    report.stammer_rate = float(report_data["stammerRate"].replace("%", ""))
+    report.severity = report_data["severity"]
+    report.recommendations = report_data["recommendations"]
+    report.raw_output = report_data  
+    report.transcription = report_data.get("transcription")
+    report.save()
+
+    session.report_generated = True
+    session.save()
+
+    return Response({"success": True, "report": report_data})

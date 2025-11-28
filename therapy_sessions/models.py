@@ -87,13 +87,14 @@ class Report(models.Model):
     severity = models.CharField(max_length=32, blank=True, null=True)
     recommendations = models.JSONField(blank=True, null=True)
     raw_output = models.JSONField(blank=True, null=True)
+    transcription = models.TextField(blank=True, null=True)
 
     def __str__(self):
         return f"Report for session {self.session_id}"
 
 class SessionFeedback(models.Model):
-    session = models.ForeignKey(Session, on_delete=models.CASCADE)
-    given_by = models.ForeignKey(User, on_delete=models.CASCADE)
+    session = models.ForeignKey(Session, on_delete=models.CASCADE, related_name="feedbacks")
+    given_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name="given_feedbacks")
     rating = models.PositiveSmallIntegerField(default=0)
     comment = models.TextField(blank=True)
     target = models.CharField(max_length=10, choices=[('user','User'), ('speaker','Speaker')])
