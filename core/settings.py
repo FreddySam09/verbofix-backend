@@ -146,6 +146,7 @@ SIMPLE_JWT = {
 
 # Allow frontend dev server (in dev only)
 CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
 
 # Channels
 ASGI_APPLICATION = "core.asgi.application"
@@ -174,3 +175,15 @@ EMAIL_USE_TLS = True
 TWILIO_ACCOUNT_SID = os.environ.get("TWILIO_ACCOUNT_SID", "")
 TWILIO_AUTH_TOKEN = os.environ.get("TWILIO_AUTH_TOKEN", "")
 TWILIO_FROM_NUMBER = os.environ.get("TWILIO_FROM_NUMBER", "")  # e.g. "+1234567890"
+
+# settings.py (edit)
+ML_FLASK_URL = None   # disable Flask microservice entirely
+ML_MODEL_PATH = os.path.join(BASE_DIR, "model", "stammer_detector_optimized2.h5")
+WHISPER_MODEL_NAME = "base"
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
