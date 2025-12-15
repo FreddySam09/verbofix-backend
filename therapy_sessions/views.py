@@ -150,6 +150,9 @@ class SessionViewSet(viewsets.ModelViewSet):
         try:
             orig_name = f"session_{session.id}_orig_{int(timezone.now().timestamp())}_{audio_file.name}"
             session.recording.save(orig_name, audio_file, save=True)
+            # mark report as processing (important for frontend polling)
+            session.report_generated = False
+            session.save(update_fields=["report_generated"])
             # after session.recording.save(...)
             audio_path = session.recording.path
             # convert if extension not wav/mp3
@@ -218,6 +221,15 @@ class SessionViewSet(viewsets.ModelViewSet):
             return Response({"detail": "Saving report failed"}, status=500)
 
         return Response({"message": "Audio processed", "report": result}, status=200)
+    
+    @action(detail=True, methods=["get"], url_path="report-status")
+    def report_status(self, request, pk=None):
+        session = self.get_object()
+        return Response({
+            "report_generated": session.report_generated,
+            "ended_at": session.ended_at,
+        })
+
     # inside class SessionViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=["post"], url_path="end")
     def post_end(self, request, pk=None):
